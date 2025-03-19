@@ -12,6 +12,8 @@ public:
 
     explicit Generator(Handle h) : handle_{h} {}
 
+    ~Generator() { if (handle_) handle_.destroy(); }
+
     auto begin() -> Iter;
 
     auto end() -> std::default_sentinel_t;
