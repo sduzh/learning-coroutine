@@ -67,18 +67,18 @@ auto ToString(const sockaddr_in& addr) -> std::string {
   return buff;
 }
 
-struct ReadAwaitable {
+struct ReadAwaiter {
   bool ready;
   ssize_t ret;
   int fd;
   char* buf;
   size_t len;
 
-  static ReadAwaitable Ready(int fd, int ret) {
+  static ReadAwaiter Ready(int fd, int ret) {
     return {.ready = true, .ret = ret, .fd = fd};
   }
 
-  static ReadAwaitable Suspend(int fd, char* buf, size_t len) {
+  static ReadAwaiter Suspend(int fd, char* buf, size_t len) {
     return {.ready = false, .fd = fd, .buf = buf, .len = len};
   }
 
@@ -99,13 +99,13 @@ struct ReadAwaitable {
   }
 };
 
-ReadAwaitable Read(int fd, char* buf, size_t len) {
+ReadAwaiter Read(int fd, char* buf, size_t len) {
   auto ret = read(fd, buf, len);
   auto ready = !(ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK));
-  return ready ? ReadAwaitable::Ready(fd, ret) : ReadAwaitable::Suspend(fd, buf, len);
+  return ready ? ReadAwaiter::Ready(fd, ret) : ReadAwaiter::Suspend(fd, buf, len);
 }
 
-struct WriteAwaitable {
+struct WriteAwaiter {
   bool ready;
   ssize_t ret;
   int epfd;
@@ -114,12 +114,12 @@ struct WriteAwaitable {
   size_t len;
   void* handle_address;
 
-  static WriteAwaitable Ready(int sockfd, ssize_t ret) {
-    return WriteAwaitable{.ready = true, .ret = ret, .sockfd = sockfd};
+  static WriteAwaiter Ready(int sockfd, ssize_t ret) {
+    return WriteAwaiter{.ready = true, .ret = ret, .sockfd = sockfd};
   }
 
-  static WriteAwaitable Suspend(int epfd, int sockfd, const char* buf, size_t len) {
-    return WriteAwaitable{.ready = false, .epfd = epfd, .sockfd=sockfd, .buf = buf, .len = len};
+  static WriteAwaiter Suspend(int epfd, int sockfd, const char* buf, size_t len) {
+    return WriteAwaiter{.ready = false, .epfd = epfd, .sockfd=sockfd, .buf = buf, .len = len};
   }
 
   bool await_ready() const noexcept { return ready; }
@@ -152,17 +152,17 @@ struct WriteAwaitable {
   }
 };
 
-WriteAwaitable Write(int epfd, int fd, const char* buf, size_t len) {
+WriteAwaiter Write(int epfd, int fd, const char* buf, size_t len) {
 #ifdef SIMULATE_PARTIAL_WRITE // 模拟partial write
   len = len > 1 ? len / 2 : len;
 #endif
 
 #ifdef SIMULATE_BLOCK_WRITE // 模拟write阻塞的情况
-  return WriteAwaitable::Suspend(epfd, fd, buf, len);
+  return WriteAwaiter::Suspend(epfd, fd, buf, len);
 #else
   auto ret = write(fd, buf, len);
   auto ready = !(ret == -1 && (errno = EAGAIN || errno == EWOULDBLOCK));
-  return ready ? WriteAwaitable::Ready(fd, ret) : WriteAwaitable::Suspend(epfd, fd, buf, len);
+  return ready ? WriteAwaiter::Ready(fd, ret) : WriteAwaiter::Suspend(epfd, fd, buf, len);
 #endif
 }
 
